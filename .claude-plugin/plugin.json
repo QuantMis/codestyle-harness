@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "codestyle-harness",
+  "description": "Retrieval-augmented coding-style harness. Implement new code that follows your framework-specific house conventions, drawn from a curated catalog of codestyle idioms (STYLE.md + canonical example + conformance checklist per pattern).",
+  "author": {
+    "name": "israa",
+    "email": "israasaifullah@gmail.com"
+  },
+  "keywords": ["codestyle", "conventions", "house-style", "scaffolding", "laravel"],
+  "license": "MIT",
+  "skills": "./skills/"
+}

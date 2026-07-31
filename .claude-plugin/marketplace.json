@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "codestyle-harness",
+  "description": "Marketplace hosting the codestyle-harness plugin.",
+  "owner": {
+    "name": "israa",
+    "email": "israasaifullah@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "codestyle-harness",
+      "source": "./",
+      "description": "Implement new code that follows your framework-specific house conventions, drawn from a curated catalog of codestyle idioms."
+    }
+  ]
+}
