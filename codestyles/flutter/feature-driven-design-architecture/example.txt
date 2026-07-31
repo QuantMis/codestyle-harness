@@ -1,0 +1,45 @@
+# Flutter — Feature-Driven Design skeleton (data + presentation)
+# Group by feature (domain capability), not by technical layer.
+# Logic/state-management layer omitted here — owned by the separate `state-management-via-provider` idiom.
+
+lib/
+├── main.dart                              # app entry point (only app-level files at lib/ root)
+├── app.dart                               # root MaterialApp / router wiring (optional)
+│
+├── features/                              # one folder per user-facing capability
+│   │
+│   ├── authentication/                    # feature = domain, snake_case
+│   │   ├── data/                          # fetches / holds / serializes data
+│   │   │   ├── models/
+│   │   │   │   └── user.dart              # class User — plain data (fields + fromJson/toJson), no widgets
+│   │   │   └── repositories/
+│   │   │       └── auth_repository.dart   # class AuthRepository — login / logout / current user
+│   │   └── presentation/                  # what the user sees
+│   │       ├── screens/
+│   │       │   ├── login_screen.dart      # class LoginScreen — full page / route
+│   │       │   └── register_screen.dart   # class RegisterScreen
+│   │       └── widgets/
+│   │           └── login_form.dart        # class LoginForm — feature-scoped reusable UI (not a full page)
+│   │
+│   └── home/
+│       ├── data/
+│       │   ├── models/
+│       │   │   └── feed_item.dart         # class FeedItem
+│       │   └── repositories/
+│       │       └── feed_repository.dart   # class FeedRepository
+│       └── presentation/
+│           ├── screens/
+│           │   └── home_screen.dart       # class HomeScreen
+│           └── widgets/
+│               └── feed_card.dart         # class FeedCard
+│
+└── shared/                                # cross-feature code only (reused by ≥2 features)
+    ├── widgets/                           # app-wide reusable UI
+    │   └── primary_button.dart            # class PrimaryButton
+    ├── utils/                             # helpers, extensions, constants, formatters
+    │   └── validators.dart
+    └── themes/                            # ThemeData, colors, text styles
+        └── app_theme.dart
+
+# Note: the `logic/` layer (e.g. `logic/providers/`) is added by the `state-management-via-provider`
+#       idiom, not by this one. This skeleton stops at data/ + presentation/.
