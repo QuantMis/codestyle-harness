@@ -28,8 +28,20 @@ Capture a new codestyle idiom into this repo's catalog. This skill **writes** to
 
 5. **Confirm** the new files back to the user, and remind them to commit + push so consumers pick it up via `/plugin update`.
 
+## Writing style (house rule)
+
+All catalog prose you write — `STYLE.md`, `checklist.md`, `INDEX.md` rows, frontmatter `use-when` / `use-when-not` — is **terse/telegraphic**. Sacrifice grammar for concision:
+
+- Fragments over sentences. Drop articles and linking verbs.
+- `→` for sequences/consequences; `|` for "or"; `≠` etc. where it saves words.
+- Symbols/code over prose (`no per-method gate checks`, not "you should avoid checking the gate in each method").
+- Terse ≠ vague — rules stay concrete and checkable. Cut words, not specifics.
+- Match the existing idioms in tone (see `codestyles/laravel/crud-controller/`).
+
+The generated *code* still follows the idiom's own rules — this concision rule governs the catalog docs, not the code output.
+
 ## Quality bar
 
-- Rules must be concrete and checkable, not vibes ("use constructor injection for dependencies", not "write clean code").
+- Rules must be concrete and checkable, not vibes ("constructor injection for deps", not "write clean code").
 - The example must actually satisfy every point in its own checklist — verify before finishing.
-- Keep each idiom single-purpose. If a discussion covers two patterns, author two idioms and cross-link them via `related`.
+- Keep each idiom single-purpose. Two patterns in one discussion → author two idioms, cross-link via `related`.

@@ -15,41 +15,41 @@
 
 # codestyle-harness
 
-A retrieval-augmented **coding-style harness**, packaged as a Claude Code plugin. Instead of letting Claude write new code in its own default style, you load this plugin and it implements features in **your** framework-specific house conventions — drawn from a curated catalog of *codestyle idioms*.
+Claude Code plugin. Makes Claude write new code in **your** framework conventions, not its default style. Conventions live in a curated catalog of *codestyle idioms*.
 
-The repo is both a **Claude Code marketplace** and a **single plugin** at its root, so it installs the same way as any published skills plugin.
+Repo = marketplace **+** single plugin at root. Installs like any skills plugin.
 
 ## How it works
 
-Each convention is a **codestyle idiom** stored under `codestyles/<framework>/<name>/`:
+One idiom = folder `codestyles/<framework>/<name>/`, three files:
 
-| File | Purpose |
-|------|---------|
-| `STYLE.md` | Intent, numbered rules, and boundaries (`use-when` / `use-when-not`). |
-| `example.<ext>` | A canonical reference implementation to imitate. |
-| `checklist.md` | Objectively verifiable conformance points. |
+| File | Holds |
+|------|-------|
+| `STYLE.md` | intent, numbered rules, `use-when` / `use-when-not` |
+| `example.<ext>` | canonical reference to imitate |
+| `checklist.md` | yes/no conformance points |
 
-`codestyles/<framework>/INDEX.md` is the catalog that the harness reads to decide which idioms to load for a task.
+`codestyles/<framework>/INDEX.md` = catalog the harness reads to pick idioms.
 
-Two skills drive it:
+Two skills:
 
-- **`apply-codestyle`** (consumption) — run in *your other projects*. Decomposes the task → retrieves the matching idioms from the catalog → implements to spec → verifies each artifact against its checklist. Reads the catalog from `${CLAUDE_PLUGIN_ROOT}/codestyles/`.
-- **`add-codestyle`** (development) — run *inside this repo*. Guides a short discussion, then authors a new idiom (`STYLE.md` + example + checklist) and updates the `INDEX`. Writes to `./codestyles/`.
+- **`apply-codestyle`** — consume, in *other projects*. Decompose task → retrieve matching idioms → implement → verify vs checklist. Reads `${CLAUDE_PLUGIN_ROOT}/codestyles/`.
+- **`add-codestyle`** — develop, *in this repo*. Discuss → author idiom (`STYLE.md` + example + checklist) → update `INDEX`. Writes `./codestyles/`.
 
-The split is deliberate: you *consume* the catalog from installed plugins in your projects, and you *grow* the catalog here, then push so consumers update.
+Split is deliberate: consume from installed plugin, grow here, push, consumers update.
 
 ## Install (consumers)
 
 ```
-/plugin marketplace add <your-github-user>/codestyle-harness
+/plugin marketplace add QuantMis/codestyle-harness
 /plugin install codestyle-harness@codestyle-harness
 ```
 
-Then, in a project, ask Claude to build a feature — the `apply-codestyle` skill activates and follows the catalog. To pick up newly added idioms later: `/plugin update`.
+Then ask Claude to build a feature — `apply-codestyle` fires, follows the catalog. Get new idioms later: `/plugin update`.
 
-## Add a new idiom (maintainer)
+## Add an idiom (maintainer)
 
-Work inside this repo and invoke the `add-codestyle` skill, or copy an existing idiom folder as a template. Keep each idiom single-purpose, make every rule checkable, and ensure the example satisfies its own checklist. Commit + push when done.
+In this repo: run `add-codestyle`, or copy an idiom folder. Keep single-purpose, every rule checkable, example passes its own checklist. Commit + push.
 
 ## Layout
 
@@ -72,6 +72,6 @@ codestyle-harness/
 
 ## Notes
 
-- Idioms are namespaced by **framework** so best practices never bleed across stacks and retrieval stays cheap.
-- `version` is intentionally omitted from `plugin.json` so each commit auto-versions by git SHA — no manual version bumps as the catalog grows. Add a semver `version` later if you want explicit releases.
-- Skills are model-invocable by default. To make one explicit-only (`/codestyle-harness:apply-codestyle`), add `disable-model-invocation: true` to its frontmatter.
+- Namespaced by **framework** — no cross-stack bleed, cheap retrieval.
+- No `version` in `plugin.json` → auto-versions by git SHA, no manual bumps. Add semver later for explicit releases.
+- Skills model-invocable by default. Explicit-only: add `disable-model-invocation: true` to frontmatter.
