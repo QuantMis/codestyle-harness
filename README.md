@@ -33,10 +33,24 @@ One idiom = folder `codestyles/<framework>/<name>/`, three files:
 
 Two skills:
 
-- **`apply-codestyle`** — consume, in *other projects*. Decompose task → retrieve matching idioms → implement → verify vs checklist. Reads `${CLAUDE_PLUGIN_ROOT}/codestyles/`.
+- **`apply-codestyle`** — consume, in *other projects*. Decompose task → retrieve matching idioms → implement → verify vs checklist → record enforcement. Reads `${CLAUDE_PLUGIN_ROOT}/codestyles/`.
 - **`add-codestyle`** — develop, *in this repo*. Discuss → author idiom (`STYLE.md` + example + checklist) → update `INDEX`. Writes `./codestyles/`.
 
 Split is deliberate: consume from installed plugin, grow here, push, consumers update.
+
+## Enforcement note
+
+Retrieval alone is amnesiac — next session, plain prompt, skill never fires, default style returns. So `apply-codestyle` registers what it applied in the consuming project:
+
+```
+project/
+├── CLAUDE.md              # gains one line: @.claude/codestyle.md
+└── .claude/codestyle.md   # idioms in force → name, scope, where to read
+```
+
+**Pointer only.** No rules copied — a copy goes stale the moment the catalog moves. The note says *which* idioms bind and to read them from the plugin; the catalog stays the single source of truth. Merged on re-run, never clobbered.
+
+The loop closes at step 0: `apply-codestyle` reads the note first, so idioms already in force are binding for the next task too.
 
 ## Install (consumers)
 
