@@ -4,7 +4,7 @@ Laravel idioms. `apply-codestyle` reads this to pick idioms per task. One row pe
 
 | Idiom | Use when | Related |
 |-------|----------|---------|
-| [`crud-controller`](./crud-controller/STYLE.md) | Resourceful CRUD for an Eloquent model, Blade views. | `form-request`, `policy-gate` |
+| [`livewire-project-init`](./livewire-project-init/STYLE.md) | Day-0 scaffold of a Laravel + Livewire app — install command, skeleton, quality-gate baseline. | `crud-controller` |
 
 <!--
 Add a row (or use add-codestyle):

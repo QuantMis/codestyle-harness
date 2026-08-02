@@ -1,0 +1,206 @@
+# Laravel + Livewire — project init skeleton (class-based components)
+# Skeleton only. Component authoring / domain layering / CRUD → separate idioms.
+
+
+# ─── 1. Bootstrap ────────────────────────────────────────────────────────────
+# One command. Official kit. Non-interactive.
+
+laravel new myapp \
+  --livewire \                    # official Livewire starter kit
+  --livewire-class-components \   # REQUIRED: v4 defaults to single-file components
+  --pest \                        # Pest, not PHPUnit
+  --git \                         # commit 1 = untouched kit output
+  --npm \                         # install + build frontend deps
+  --database=sqlite               # mysql | mariadb | pgsql | sqlite | sqlsrv
+
+# Resolves to (kit's choice — do not pin by hand):
+#   laravel/framework ^13 · livewire/livewire ^4 · livewire/flux ^2 · laravel/fortify
+#   tailwindcss ^4 · vite ^8 · pestphp/pest ^5 · larastan/larastan ^3 · laravel/pint ^1
+
+
+# ─── 2. Skeleton ─────────────────────────────────────────────────────────────
+# [kit]   = generated, leave alone
+# [delta] = the only two files this idiom adds at init
+
+myapp/
+├── app/
+│   ├── Livewire/                              # [kit] class components live here
+│   │   ├── Actions/
+│   │   │   └── Logout.php                     # invokable, not a Component
+│   │   └── Settings/                          # folder = DOMAIN capability, not a technical bucket
+│   │       ├── Appearance.php                 # App\Livewire\Settings\Appearance
+│   │       ├── DeleteUserForm.php
+│   │       ├── Profile.php                    # no render() — view resolved by convention
+│   │       ├── Security.php
+│   │       └── TwoFactor/
+│   │           └── RecoveryCodes.php
+│   ├── Actions/Fortify/                       # [kit] auth actions
+│   ├── Concerns/                              # [kit] shared traits (validation rules)
+│   ├── Http/Controllers/Controller.php        # [kit] base controller (see `crud-controller`)
+│   ├── Models/User.php
+│   └── Providers/
+│
+├── resources/
+│   ├── css/app.css                            # [kit] Tailwind 4 entry
+│   ├── js/app.js
+│   └── views/
+│       ├── layouts/                           # [kit] app + auth shells
+│       │   ├── app.blade.php
+│       │   └── auth.blade.php
+│       ├── flux/                              # [kit] published Flux UI overrides
+│       ├── components/                        # Blade components (≠ Livewire components)
+│       ├── partials/
+│       └── livewire/                          # 1:1 MIRROR of app/Livewire/
+│           ├── auth/
+│           │   ├── login.blade.php
+│           │   └── register.blade.php
+│           └── settings/
+│               ├── appearance.blade.php       # ← App\Livewire\Settings\Appearance
+│               ├── delete-user-form.blade.php # ← ...\Settings\DeleteUserForm  (kebab-case)
+│               ├── profile.blade.php
+│               └── two-factor/
+│                   └── recovery-codes.blade.php
+│
+├── routes/
+│   ├── web.php                                # thin: view routes + require per-domain files
+│   └── settings.php                           # [kit] domain route file — copy this pattern
+│
+├── tests/
+│   ├── Pest.php                               # binds Tests\TestCase + RefreshDatabase
+│   ├── TestCase.php
+│   ├── Feature/
+│   └── Unit/
+│
+├── database/
+│   ├── .gitignore                             # [kit] "*.sqlite*" — never force-add the db file
+│   ├── factories/ migrations/ seeders/
+│
+├── .github/
+│   ├── workflows/tests.yml                    # [kit] composer setup → composer ci:check
+│   └── dependabot.yml                         # [kit]
+│
+├── .githooks/
+│   └── pre-commit                             # [delta] committed hook (see §4)
+│
+├── .env.example                               # committed; .env never
+├── pint.json                                  # [kit] + [delta] strict-types rule (see §3)
+├── phpstan.neon                               # [kit] Larastan level 7 — ratchet up only
+├── composer.json                              # scripts are the ONLY gate entrypoint
+├── package.json  vite.config.js
+└── phpunit.xml
+
+
+# ─── 3. Delta A — strict types via Pint ──────────────────────────────────────
+# pint.json  (kit ships only {"preset": "laravel"})
+
+{
+    "preset": "laravel",
+    "rules": {
+        "declare_strict_types": true
+    }
+}
+
+# Then normalize the whole tree ONCE, as its own commit:
+#   composer lint && git commit -am "chore: enforce strict_types"
+# Never hand-type declare(strict_types=1). Never exempt a file.
+
+
+# ─── 3b. Delta A fallout — REQUIRED, or CI stays red ─────────────────────────
+# strict_types kills Stringable->string coercion, so Larastan level 7 now fails
+# on the kit's OWN trait:
+#
+#   app/Concerns/ProfileValidationRules.php:43
+#     Method ...::emailRules() should return
+#       array<int, array<mixed>|ValidationRule|string>
+#     but returns array<int, Unique|string>.
+#
+# Cause: Rule::unique() returns Illuminate\Validation\Rules\Unique, which
+#        implements Stringable — NOT ValidationRule.
+# Fix:   name the concrete rule class in the union. The kit's sibling trait
+#        PasswordValidationRules already does exactly this with `Password`.
+
+  use Illuminate\Validation\Rule;
++ use Illuminate\Validation\Rules\Unique;
+
+  /**
+-  * @return array<int, ValidationRule|array<mixed>|string>
++  * @return array<int, Unique|ValidationRule|array<mixed>|string>
+   */
+  protected function emailRules(?int $userId = null): array
+
+# Apply to all three annotations in that trait (profileRules, nameRules, emailRules).
+# NOT allowed: @phpstan-ignore, a baseline, or dropping phpstan.neon to level 5.
+
+
+# ─── 4. Delta B — committed pre-commit hook ──────────────────────────────────
+# .githooks/pre-commit   (chmod +x)
+
+#!/bin/sh
+set -e
+composer lint
+composer types:check
+
+# Wire it (hooks live in the repo, not in .git/hooks):
+#   git config core.hooksPath .githooks
+
+# composer.json — add hooks:install, chain it from setup:
+#
+#   "hooks:install": [
+#       "git config core.hooksPath .githooks",
+#       "@php -r \"chmod('.githooks/pre-commit', 0755);\""
+#   ],
+#   "setup": [
+#       "composer install",
+#       "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+#       "@php artisan key:generate",
+#       "@php artisan migrate --force",
+#       "@hooks:install",              <-- added
+#       "npm install",
+#       "npm run build"
+#   ]
+
+
+# ─── 5. Gate entrypoints — composer scripts only ─────────────────────────────
+# Kit-provided. Use these everywhere (CI, hooks, README). Never vendor/bin/* directly.
+
+composer setup          # install + .env + key + migrate + hooks + npm build
+composer dev            # local dev server
+composer lint           # pint --parallel            (fix)
+composer lint:check     # pint --parallel --test     (verify)
+composer types:check    # phpstan analyse
+composer test           # config:clear + lint:check + types:check + artisan test
+composer ci:check       # what .github/workflows/tests.yml runs
+
+
+# ─── 6. Routing full-page components ─────────────────────────────────────────
+# routes/settings.php — the kit's own pattern; copy it per domain.
+
+Route::middleware(['auth'])->group(function () {
+    Route::livewire('settings/profile', Profile::class)->name('profile.edit');
+});
+
+# NOT: Route::get('settings/profile', Profile::class)
+# routes/web.php stays thin:  require __DIR__.'/settings.php';
+
+
+# ─── 7. Definition of done ───────────────────────────────────────────────────
+# Init is finished when this is green on a clean clone — not when laravel new exits.
+
+composer ci:check
+
+# Expected on a correct init (verified 2026-08 against the real kit):
+#   pint      -> {"result":"passed"}
+#   phpstan   -> {"result":"passed","errors":0}
+#   pest      -> 33 passed
+
+# Two failures observed during a real init — check these first if it's red:
+#
+# a) "Invalid URI: Host is malformed."  (every artisan command dies)
+#    The installer can write a doubled port into .env:
+#      APP_URL=http://localhost:8000:8000   ->   APP_URL=http://localhost:8000
+#    Nothing boots until this is fixed — including phpstan, since Larastan boots the app.
+#
+# b) "PHPStan process crashed because it reached configured PHP memory limit: 128M"
+#    Ambient php.ini limit, not a code problem. Raise memory_limit locally
+#    (CI's setup-php already runs unlimited). Do NOT "fix" it by narrowing
+#    phpstan.neon paths.
