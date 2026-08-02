@@ -1,26 +1,72 @@
 # Laravel + Livewire — project init skeleton (class-based components)
 # Skeleton only. Component authoring / domain layering / CRUD → separate idioms.
+#
+# Init is DB-INDEPENDENT: everything below runs green with no database server.
+# Real drivers (mysql/pgsql/…) are Stage 3 provisioning — see §8.
+#
+# HEADS UP before you run anything: --livewire pulls in Flux UI (livewire/flux).
+# It is not a swappable theme — ~26 kit views consume <flux:*>. Free tier + paid
+# Pro tier. See §9.
 
 
 # ─── 1. Bootstrap ────────────────────────────────────────────────────────────
-# One command. Official kit. Non-interactive.
+# One command. Official kit. Non-interactive. Run from the PARENT directory.
 
+# REQUIRED: pre-set APP_URL or the installer's own artisan calls die mid-run
+# (Herd installer 1.24.2 writes a doubled port — see §2). Dotenv's immutable
+# mode makes the exported value win inside the installer.
+export APP_URL=http://localhost:8000
+
+cd /path/to/projects            # laravel new creates ./myapp here
 laravel new myapp \
-  --livewire \                    # official Livewire starter kit
+  --livewire \                    # official Livewire starter kit (pulls in Flux — §9)
   --livewire-class-components \   # REQUIRED: v4 defaults to single-file components
-  --pest \                        # Pest, not PHPUnit
+  --pest \                        # Pest as the RUNNER (not a syntax converter — §6)
   --git \                         # commit 1 = untouched kit output
   --npm \                         # install + build frontend deps
-  --database=sqlite               # mysql | mariadb | pgsql | sqlite | sqlsrv
+  --database=sqlite               # init default — zero-dependency. Other drivers: §8
+  # --force                       # add if ./myapp already exists, even if empty
 
 # Resolves to (kit's choice — do not pin by hand):
 #   laravel/framework ^13 · livewire/livewire ^4 · livewire/flux ^2 · laravel/fortify
 #   tailwindcss ^4 · vite ^8 · pestphp/pest ^5 · larastan/larastan ^3 · laravel/pint ^1
 
 
-# ─── 2. Skeleton ─────────────────────────────────────────────────────────────
+# ─── 2. Post-install repair — do this BEFORE any other change ────────────────
+# The exported APP_URL prevents the CASCADE (artisan works during install, so
+# tests/Pest.php comes out properly populated). It does NOT prevent the WRITER
+# bug — .env still gets the doubled port. Both are needed.
+#
+#   .env  ->  APP_URL=http://localhost:8000:8000     # malformed, kills artisan
+#   .env.example -> APP_URL=http://localhost:8000    # correct
+
+cd myapp
+
+# Copy the good APP_URL line from .env.example over the bad one in .env:
+awk 'NR==FNR { if ($0 ~ /^APP_URL=/) good=$0; next }
+     /^APP_URL=/ { print good; next }
+     { print }' .env.example .env > .env.tmp && mv .env.tmp .env
+
+php artisan config:clear
+php artisan about | head -5          # verify: no "Invalid URI: Host is malformed."
+
+# Also restore the trailing newline the installer strips from composer.json:
+tail -c1 composer.json | read -r _ || printf '\n' >> composer.json
+
+# Environment notes (not bugs in your code):
+#   * APP_URL doubling: Laravel Herd installer 1.24.2, deterministic here,
+#     no CLI flag controls it. Report upstream; work around as above.
+#   * PHPStan "... stub is not a file": shared-tmpdir cache collision with
+#     ANOTHER project (a scratch app from this same idiom is a likely poisoner).
+#       rm -rf "$(php -r 'echo sys_get_temp_dir();')/phpstan"
+#   * PHPStan "reached configured PHP memory limit: 128M": informational.
+#     Did not reproduce on a fresh small project. If it does, raise memory_limit
+#     locally (CI's setup-php runs unlimited). Never narrow phpstan.neon paths.
+
+
+# ─── 3. Skeleton ─────────────────────────────────────────────────────────────
 # [kit]   = generated, leave alone
-# [delta] = the only two files this idiom adds at init
+# [delta] = added by this idiom
 
 myapp/
 ├── app/
@@ -44,7 +90,7 @@ myapp/
 │   ├── css/app.css                            # [kit] Tailwind 4 entry
 │   ├── js/app.js
 │   └── views/
-│       ├── layouts/                           # [kit] app + auth shells
+│       ├── layouts/                           # [kit] app + auth shells — <flux:*> throughout
 │       │   ├── app.blade.php
 │       │   └── auth.blade.php
 │       ├── flux/                              # [kit] published Flux UI overrides
@@ -66,13 +112,14 @@ myapp/
 │   └── settings.php                           # [kit] domain route file — copy this pattern
 │
 ├── tests/
-│   ├── Pest.php                               # binds Tests\TestCase + RefreshDatabase
+│   ├── Pest.php                               # [kit] binds Tests\TestCase + RefreshDatabase
 │   ├── TestCase.php
-│   ├── Feature/
+│   ├── Feature/                               # [kit] PHPUnit-style classes — LEAVE THEM (§6)
 │   └── Unit/
 │
 ├── database/
 │   ├── .gitignore                             # [kit] "*.sqlite*" — never force-add the db file
+│   ├── database.sqlite                        # [kit] created by --database=sqlite; untracked
 │   ├── factories/ migrations/ seeders/
 │
 ├── .github/
@@ -83,16 +130,47 @@ myapp/
 │   └── pre-commit                             # [delta] committed hook (see §4)
 │
 ├── .env.example                               # committed; .env never
-├── pint.json                                  # [kit] + [delta] strict-types rule (see §3)
-├── phpstan.neon                               # [kit] Larastan level 7 — ratchet up only
+├── pint.json                                  # [kit] {"preset":"laravel"} — strict types OPTIONAL (§5)
+├── phpstan.neon                               # [kit] Larastan level 7 — KEEP. Ratchet up only.
 ├── composer.json                              # scripts are the ONLY gate entrypoint
 ├── package.json  vite.config.js
 └── phpunit.xml
 
 
-# ─── 3. Delta A — strict types via Pint ──────────────────────────────────────
-# pint.json  (kit ships only {"preset": "laravel"})
+# ─── 4. Delta — committed pre-commit hook (the one mandatory delta) ──────────
+# .githooks/pre-commit   (chmod +x)
 
+#!/bin/sh
+set -e
+composer lint
+composer types:check
+
+# Wire it (hooks live in the repo, not in .git/hooks):
+#   git config core.hooksPath .githooks
+
+# composer.json — add hooks:install, chain it from setup:
+#
+#   "hooks:install": [
+#       "git config core.hooksPath .githooks",
+#       "@php -r \"chmod('.githooks/pre-commit', 0755);\""
+#   ],
+#   "setup": [
+#       "composer install",
+#       "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+#       "@php artisan key:generate",
+#       "@php artisan migrate --force",   <-- on sqlite this is a local file op, no server
+#       "@hooks:install",                 <-- added
+#       "npm install",
+#       "npm run build"
+#   ]
+
+
+# ─── 5. OPTIONAL delta — strict types via Pint (deferred by default) ─────────
+# Not required to call init done. Adopt when the team wants it, as its own
+# commit. Cost: it breaks Larastan on the kit's own code (5b) — that fix is
+# NOT optional if you turn the rule on.
+
+# pint.json
 {
     "preset": "laravel",
     "rules": {
@@ -100,12 +178,13 @@ myapp/
     }
 }
 
-# Then normalize the whole tree ONCE, as its own commit:
 #   composer lint && git commit -am "chore: enforce strict_types"
 # Never hand-type declare(strict_types=1). Never exempt a file.
 
 
-# ─── 3b. Delta A fallout — REQUIRED, or CI stays red ─────────────────────────
+# ─── 5b. Fallout of §5 — ship it in the SAME commit ──────────────────────────
+# (Only applies if you adopted §5. Verified fix — works exactly as written.)
+#
 # strict_types kills Stringable->string coercion, so Larastan level 7 now fails
 # on the kit's OWN trait:
 #
@@ -132,47 +211,76 @@ myapp/
 # NOT allowed: @phpstan-ignore, a baseline, or dropping phpstan.neon to level 5.
 
 
-# ─── 4. Delta B — committed pre-commit hook ──────────────────────────────────
-# .githooks/pre-commit   (chmod +x)
-
-#!/bin/sh
-set -e
-composer lint
-composer types:check
-
-# Wire it (hooks live in the repo, not in .git/hooks):
-#   git config core.hooksPath .githooks
-
-# composer.json — add hooks:install, chain it from setup:
+# ─── 6. Tests — Pest is the runner, not a syntax mandate ─────────────────────
+# The kit ships PHPUnit-style tests:
 #
-#   "hooks:install": [
-#       "git config core.hooksPath .githooks",
-#       "@php -r \"chmod('.githooks/pre-commit', 0755);\""
-#   ],
-#   "setup": [
-#       "composer install",
-#       "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
-#       "@php artisan key:generate",
-#       "@php artisan migrate --force",
-#       "@hooks:install",              <-- added
-#       "npm install",
-#       "npm run build"
-#   ]
+#   tests/Feature/Auth/AuthenticationTest.php
+#     final class AuthenticationTest extends TestCase { public function test_…() {…} }
+#
+# These run green under Pest AS SHIPPED — 33 passed, unconverted. Verified.
+# DO NOT hand-convert them to Pest function syntax:
+#   - --pest selects the runner; it is not a converter
+#   - converting is off the kit's upgrade path (violates "untouched kit output")
+#   - it buys nothing: same 33 tests, same result
+#
+# Write NEW tests in Pest function style. Leave kit tests alone.
+
+composer test        # expect: 33 passed
 
 
-# ─── 5. Gate entrypoints — composer scripts only ─────────────────────────────
+# ─── 7. Gate entrypoints — composer scripts only ─────────────────────────────
 # Kit-provided. Use these everywhere (CI, hooks, README). Never vendor/bin/* directly.
 
 composer setup          # install + .env + key + migrate + hooks + npm build
 composer dev            # local dev server
 composer lint           # pint --parallel            (fix)
 composer lint:check     # pint --parallel --test     (verify)
-composer types:check    # phpstan analyse
+composer types:check    # phpstan analyse            (Larastan — KEEP IT)
 composer test           # config:clear + lint:check + types:check + artisan test
 composer ci:check       # what .github/workflows/tests.yml runs
 
 
-# ─── 6. Routing full-page components ─────────────────────────────────────────
+# ─── 8. Definition of done — no database server required ─────────────────────
+# Init is finished when this is green on a clean clone with NOTHING provisioned:
+
+composer install
+composer lint:check     # -> {"result":"passed"}
+composer types:check    # -> {"result":"passed","errors":0}
+composer test           # -> 33 passed        (sqlite; RefreshDatabase works fine)
+
+# That's it. NOT gated on: a running MySQL/Postgres, a migration against a
+# server, or `composer ci:check` if your ci:check reaches for one.
+
+# ── Stage 3: provisioning (SEPARATE milestone, own checklist) ──
+# Switching to a real driver is not a one-line .env edit. It propagates:
+#
+#   .env / .env.example   DB_CONNECTION=mysql + host/port/db/user/pass keys
+#   local                 a running server, a created database
+#   CI                    .github/workflows/tests.yml needs a matching
+#                         services: block (image, env, ports, health check)
+#                         and DB_* env — the kit's sqlite workflow has none
+#   tests                 RefreshDatabase now hits a real server per run
+#
+# Do this when the app actually needs the driver's features. Not at init.
+
+
+# ─── 9. Flux UI — disclosed, not silently imposed ────────────────────────────
+# --livewire installs livewire/flux. This is NOT a swappable theme:
+#   * ~26 kit view files consume <flux:*> components
+#   * the app + auth layouts are built on it
+#   * there is no official Flux-free Livewire starter kit
+#
+# So "kit-faithful" and "Flux-free" are mutually exclusive. This idiom chooses
+# kit-faithful — knowingly. Flux ships a free tier; Flux Pro is paid.
+#
+# If Flux is unacceptable for your project, that is a decision to make BEFORE
+# §1, and it puts you off this idiom entirely: you are choosing a non-kit
+# scaffold (bare skeleton + hand-wired Livewire/Tailwind/auth) and accepting
+# that you own the upgrade path forever. Do not try to eject Flux from a
+# kit-scaffolded app after the fact — 26 views is a rewrite, not a swap.
+
+
+# ─── 10. Routing full-page components ────────────────────────────────────────
 # routes/settings.php — the kit's own pattern; copy it per domain.
 
 Route::middleware(['auth'])->group(function () {
@@ -181,26 +289,3 @@ Route::middleware(['auth'])->group(function () {
 
 # NOT: Route::get('settings/profile', Profile::class)
 # routes/web.php stays thin:  require __DIR__.'/settings.php';
-
-
-# ─── 7. Definition of done ───────────────────────────────────────────────────
-# Init is finished when this is green on a clean clone — not when laravel new exits.
-
-composer ci:check
-
-# Expected on a correct init (verified 2026-08 against the real kit):
-#   pint      -> {"result":"passed"}
-#   phpstan   -> {"result":"passed","errors":0}
-#   pest      -> 33 passed
-
-# Two failures observed during a real init — check these first if it's red:
-#
-# a) "Invalid URI: Host is malformed."  (every artisan command dies)
-#    The installer can write a doubled port into .env:
-#      APP_URL=http://localhost:8000:8000   ->   APP_URL=http://localhost:8000
-#    Nothing boots until this is fixed — including phpstan, since Larastan boots the app.
-#
-# b) "PHPStan process crashed because it reached configured PHP memory limit: 128M"
-#    Ambient php.ini limit, not a code problem. Raise memory_limit locally
-#    (CI's setup-php already runs unlimited). Do NOT "fix" it by narrowing
-#    phpstan.neon paths.
