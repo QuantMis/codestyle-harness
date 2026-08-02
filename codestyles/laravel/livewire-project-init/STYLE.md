@@ -4,7 +4,7 @@ name: livewire-project-init
 tags: [scaffold, project-init, livewire, starter-kit, tooling, ci]
 use-when: Day-0 scaffold of a new Laravel + Livewire app — install command, directory skeleton, quality-gate baseline.
 use-when-not: App already scaffolded (never re-scaffold). Component authoring / state / validation / CRUD conventions (→ separate idioms). Inertia (React/Vue) or API-only frontends. Package/plugin repos.
-related: [crud-controller]
+related: [everything-modular, crud-controller]
 ---
 
 # Laravel — Livewire Project Init
@@ -41,6 +41,8 @@ Stack the kit resolves to (verified 2026-08): Laravel 13 · Livewire 4 · Flux U
 4. Commit 1 = untouched kit output (`--git` produces it). Every deviation lands in later commits → next kit upgrade stays diffable.
 
 ### Structure
+
+Skeleton-level only. Full module layout (Livewire/Services/views/routes naming, `Shared/`, what stays flat) → `everything-modular`.
 
 5. Component ↔ view mirror 1:1 — `app/Livewire/<Domain>/<Name>.php` (ns `App\Livewire\<Domain>`) ↔ `resources/views/livewire/<domain>/<kebab-name>.blade.php`. Mirror holds → omit `render()`.
 6. `app/Livewire/` subfolders = domain capabilities (`Settings/`, `Billing/`), never technical buckets (`Forms/`, `Tables/`, `Components/`).

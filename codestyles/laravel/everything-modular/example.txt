@@ -1,0 +1,189 @@
+# Laravel + Livewire — everything-modular layout
+#
+# Three modules: complaints, assets, reports.
+# One name, four places. Same name, only the case convention differs.
+#
+#   app/Livewire/<Module>/              PascalCase
+#   app/Services/<Module>/              PascalCase
+#   resources/views/livewire/<module>/  kebab-case
+#   routes/<module>.php                 kebab-case
+#
+# Only Livewire/ and Services/ modularize. Everything else under app/ stays flat.
+
+
+# ─── 1. Tree ─────────────────────────────────────────────────────────────────
+
+app/
+├── Livewire/                                 # MODULARIZED
+│   ├── Complaints/
+│   │   ├── ListComplaints.php                # App\Livewire\Complaints\ListComplaints
+│   │   ├── ComplaintForm.php
+│   │   └── ComplaintDetail.php
+│   ├── Assets/
+│   │   ├── ListAssets.php
+│   │   ├── AssetForm.php
+│   │   └── AssetDetail.php
+│   ├── Reports/
+│   │   ├── ComplaintSummary.php
+│   │   └── AssetRegister.php
+│   ├── Shared/                               # reserved module name — used by >=2 modules
+│   │   └── ConfirmDeleteModal.php
+│   ├── Auth/                                 # [kit] pre-existing — leave it
+│   ├── Settings/                             # [kit]
+│   └── Actions/                              # [kit] technical bucket; the one exception
+│       └── Logout.php
+│
+├── Services/                                 # MODULARIZED — mirrors Livewire/ folder-for-folder
+│   ├── Complaints/
+│   │   ├── ComplaintNumberGenerator.php      # named for the JOB — no *Service suffix
+│   │   └── SlaCalculator.php
+│   ├── Assets/
+│   │   └── DepreciationCalculator.php
+│   ├── Reports/
+│   │   └── ComplaintSummaryQuery.php
+│   └── Shared/
+│       └── PdfExporter.php                   # complaints + reports both export -> promoted
+│
+├── Models/                                   # FLAT. always. no subfolders.
+│   ├── Complaint.php                         # App\Models\Complaint
+│   ├── Asset.php
+│   └── User.php
+├── Jobs/                                     # FLAT — not a modularized layer
+├── Policies/                                 # FLAT
+├── Enums/                                    # FLAT
+├── Http/                                     # FLAT
+└── Providers/                                # nothing added here, ever
+
+resources/views/
+├── livewire/                                 # 1:1 MIRROR of app/Livewire/ (kebab-case)
+│   ├── complaints/
+│   │   ├── list-complaints.blade.php         # <- App\Livewire\Complaints\ListComplaints
+│   │   ├── complaint-form.blade.php
+│   │   └── complaint-detail.blade.php
+│   ├── assets/
+│   │   ├── list-assets.blade.php
+│   │   ├── asset-form.blade.php
+│   │   └── asset-detail.blade.php
+│   ├── reports/
+│   │   ├── complaint-summary.blade.php
+│   │   └── asset-register.blade.php
+│   └── shared/
+│       └── confirm-delete-modal.blade.php
+├── components/                               # Blade components (NOT Livewire) — same module names
+│   ├── complaints/
+│   │   └── status-badge.blade.php            # <x-complaints.status-badge />
+│   └── shared/
+│       └── page-header.blade.php
+├── layouts/                                  # [kit] app-level — NOT modularized
+├── partials/                                 # [kit]
+└── flux/                                     # [kit]
+
+routes/
+├── web.php                                   # thin: requires only
+├── complaints.php
+├── assets.php
+├── reports.php
+└── settings.php                              # [kit] — the pattern these copy
+
+
+# ─── 2. The mirror ───────────────────────────────────────────────────────────
+# Livewire v3+ auto-discovers App\Livewire\* and DERIVES the view path from the
+# class path. Nothing is registered or configured. The mapping enforces itself.
+#
+#   Class                                        View
+#   ------------------------------------------   ------------------------------------------------
+#   App\Livewire\Complaints\ListComplaints       livewire/complaints/list-complaints.blade.php
+#   App\Livewire\Complaints\ComplaintForm        livewire/complaints/complaint-form.blade.php
+#   App\Livewire\Assets\AssetForm                livewire/assets/asset-form.blade.php
+#   App\Livewire\Reports\ComplaintSummary        livewire/reports/complaint-summary.blade.php
+#
+# Mirror holds -> NO render() method at all:
+
+namespace App\Livewire\Complaints;
+
+use App\Models\Complaint;
+use App\Services\Complaints\SlaCalculator;      # same-module service
+use App\Services\Shared\PdfExporter;            # shared service — plain use, no interface
+use Livewire\Component;
+
+class ListComplaints extends Component
+{
+    public function mount(SlaCalculator $sla): void { /* … */ }
+
+    // no render(). the view is livewire/complaints/list-complaints.blade.php
+    // by derivation. if you ever need ->render() to point elsewhere, the mirror
+    // is broken — RENAME THE CLASS.
+}
+
+
+# ─── 3. Routes — one file per module ─────────────────────────────────────────
+
+# routes/web.php — thin. requires + top-level view routes only. no domain bodies.
+
+require __DIR__.'/complaints.php';
+require __DIR__.'/assets.php';
+require __DIR__.'/reports.php';
+require __DIR__.'/settings.php';        # [kit]
+
+
+# routes/complaints.php — module name in the filename, the path, and the route name.
+
+use App\Livewire\Complaints\ComplaintDetail;
+use App\Livewire\Complaints\ComplaintForm;
+use App\Livewire\Complaints\ListComplaints;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth'])->group(function () {
+    Route::livewire('complaints', ListComplaints::class)->name('complaints.index');
+    Route::livewire('complaints/create', ComplaintForm::class)->name('complaints.create');
+    Route::livewire('complaints/{complaint}', ComplaintDetail::class)->name('complaints.show');
+});
+
+# NOT: Route::get('complaints', ListComplaints::class)
+
+
+# ─── 4. Adding a module ──────────────────────────────────────────────────────
+# Three folders + one route file + one require line. All four, every time —
+# even the empty ones. That is what makes placement a lookup, not a decision.
+
+mkdir -p app/Livewire/Inspections
+mkdir -p app/Services/Inspections            && touch app/Services/Inspections/.gitkeep
+mkdir -p resources/views/livewire/inspections
+touch    routes/inspections.php              # empty Route::middleware(...)->group(fn () => …)
+#        + require __DIR__.'/inspections.php';  in routes/web.php
+
+php artisan make:livewire Inspections/ListInspections --class
+#   -> app/Livewire/Inspections/ListInspections.php
+#   -> resources/views/livewire/inspections/list-inspections.blade.php   (mirror, free)
+
+# Nothing else. No provider, no config, no manifest, no composer autoload entry.
+
+
+# ─── 5. Shared — promote on the SECOND consumer ──────────────────────────────
+#
+#   PdfExporter used by Complaints only        -> app/Services/Complaints/PdfExporter.php
+#   Reports needs it too                        -> app/Services/Shared/PdfExporter.php
+#   Reports needs it too, and you copy it       -> WRONG
+#
+# Shared/ is a real module name, valid in every modularized location:
+#   app/Livewire/Shared/  app/Services/Shared/
+#   resources/views/livewire/shared/  resources/views/components/shared/
+#
+# Modules are FOLDERS, not bounded contexts. Cross-module calls are fine and
+# need no interface:
+#     App\Livewire\Reports\ComplaintSummary
+#       -> App\Services\Complaints\SlaCalculator     OK
+#
+# But when 3+ unrelated things pile up in Shared/, that is not "sharing working"
+# — it is a module you never named. Name it.
+
+
+# ─── 6. What does NOT get a module folder ────────────────────────────────────
+#
+#   app/Models/Complaints/Complaint.php     WRONG  -> app/Models/Complaint.php
+#   app/Jobs/Complaints/SendSlaAlert.php    WRONG  -> app/Jobs/SendSlaAlert.php
+#   app/Policies/Complaints/…               WRONG  -> app/Policies/ComplaintPolicy.php
+#   app/Enums/Complaints/…                  WRONG  -> app/Enums/ComplaintStatus.php
+#   app/Modules/Complaints/…                WRONG  -> module-first; this is layer-first
+#   app/Domain/ app/Repositories/ app/Support/     WRONG  -> app/Services/<Module>/
+#   resources/views/layouts/complaints/…    WRONG  -> app-level views aren't modularized
