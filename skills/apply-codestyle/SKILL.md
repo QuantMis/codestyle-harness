@@ -22,7 +22,7 @@ Structure: `codestyles/<framework>/INDEX.md` is the catalog; each entry is a fol
 
 3. **Retrieve matching idioms.** Read `codestyles/<framework>/INDEX.md`. For each artifact, select the matching codestyle entry — there may be **several** for one task (e.g. `crud-controller` + `form-request` + `policy-gate`). Load each selected `STYLE.md` and its `example` file.
 
-4. **Handle gaps.** If an artifact has **no** matching codestyle in the catalog, stop before implementing it and hand off to the `add-codestyle` skill to author the missing idiom first (or, if you cannot, flag the gap to the user and ask how to proceed). Never silently improvise a convention the catalog doesn't cover.
+4. **Handle gaps.** If an artifact has **no** matching codestyle in the catalog, stop before implementing it and communicate with the author, list down the unmatched artifact and decide either proceed via adhoc codestyle from claude or plan a codestyle update?
 
 5. **Implement** each artifact by following its `STYLE.md` rules and mirroring the structure/naming of its `example` file, adapted to the user's model/domain. When multiple idioms apply, compose them.
 
