@@ -1,0 +1,400 @@
+# Laravel + Livewire — everything-modular, role dimension
+#
+# Delta on everything-modular. Module is axis 1, role is axis 2.
+#
+#   app/Livewire/<Module>/<Role>/           PascalCase   <- ONLY layer with role folders
+#   app/Services/<Module>/                  PascalCase   <- no roles, ever
+#   resources/views/livewire/<module>/<role>/  kebab-case
+#   routes/<module>.php                     one file per MODULE; role = group inside
+#
+# Split threshold: > 2 role conditionals in one component or its view.
+# Below that: one component, scope the query, @can the buttons.
+
+
+# ─── 1. Tree ─────────────────────────────────────────────────────────────────
+
+app/
+├── Livewire/
+│   └── Complaints/                           # module = axis 1
+│       ├── Admin/                            # role = axis 2, INSIDE the module
+│       │   ├── ListComplaints.php            # App\Livewire\Complaints\Admin\ListComplaints
+│       │   └── ComplaintDetail.php           #   ^ default shapes survive the split
+│       ├── Technician/
+│       │   └── ListComplaints.php            #   same class name, different folder — fine
+│       ├── Staff/
+│       │   ├── ListComplaints.php
+│       │   └── ComplaintForm.php
+│       └── ComplaintDetail.php               # UNSPLIT — technician + staff share it at
+│                                             #   <=2 role conditionals. only ADMIN's detail
+│                                             #   screen diverged enough to earn a folder.
+│                                             #   role folders are not all-or-nothing.
+│
+├── Services/
+│   └── Complaints/                           # NO role folders here. not now, not later.
+│       ├── ComplaintNumberGenerator.php      #   no auth(), no $role param — a queued job
+│       └── EscalationRouter.php              #   runs these with no authenticated user
+│
+├── Models/                                   # FLAT (everything-modular #6)
+│   ├── Complaint.php
+│   └── User.php
+├── Policies/                                 # FLAT — one policy per model, roles inside it
+│   └── ComplaintPolicy.php                   #   NOT Policies/Admin/ComplaintPolicy.php
+├── Enums/                                    # FLAT
+└── Providers/
+    └── AppServiceProvider.php                # gates defined in boot(); nothing else added
+
+resources/views/
+├── livewire/
+│   └── complaints/                           # 1:1 MIRROR, one level deeper
+│       ├── admin/
+│       │   ├── list-complaints.blade.php
+│       │   └── complaint-detail.blade.php
+│       ├── technician/
+│       │   └── list-complaints.blade.php
+│       ├── staff/
+│       │   ├── list-complaints.blade.php
+│       │   └── complaint-form.blade.php
+│       └── complaint-detail.blade.php        # <- the unsplit component
+├── components/
+│   └── complaints/
+│       └── status-badge.blade.php            # <x-complaints.status-badge /> — role-AGNOSTIC
+└── layouts/                                  # FLAT. one layout per role, at most.
+    ├── app.blade.php                         #   NOT layouts/complaints/admin.blade.php
+    └── admin.blade.php
+
+routes/
+├── web.php                                   # requires only
+└── complaints.php                            # ONE file for the module. no routes/admin.php.
+
+
+# ─── 2. The mirror, one level deeper ─────────────────────────────────────────
+# Still derived, still nothing configured.
+#
+#   Class                                             View
+#   ----------------------------------------------    ---------------------------------------------------
+#   App\Livewire\Complaints\Admin\ListComplaints      livewire/complaints/admin/list-complaints.blade.php
+#   App\Livewire\Complaints\Technician\ListComplaints livewire/complaints/technician/list-complaints.blade.php
+#   App\Livewire\Complaints\Staff\ComplaintForm       livewire/complaints/staff/complaint-form.blade.php
+#   App\Livewire\Complaints\ComplaintDetail           livewire/complaints/complaint-detail.blade.php
+#
+# WRONG, and why:
+#   App\Livewire\Admin\Complaints\ListComplaints   -> role-first. needs Services\Admin\ to
+#                                                    match. that folder can never exist.
+#   App\Livewire\Complaints\Admin\AdminListComplaints -> role in folder AND class name
+#   App\Livewire\Complaints\Admin\ManageComplaints    -> role-verb instead of List<Entities>
+
+
+# ─── 3. Routes — role is a GROUP, not a file ─────────────────────────────────
+
+# routes/web.php
+require __DIR__.'/complaints.php';
+
+
+# routes/complaints.php
+#
+#   URLs  role-first    /admin/complaints          <- users read URLs
+#   NAMES module-first  complaints.admin.index     <- code reads names; must match the
+#                                                     folder path Complaints/Admin/
+#   This divergence is deliberate. Do not "fix" it.
+
+use App\Livewire\Complaints\{Admin, Staff, Technician};
+use App\Livewire\Complaints\ComplaintDetail;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth'])->name('complaints.')->group(function () {
+
+    // unsplit component -> NO role segment, in the URL or the name
+    Route::livewire('complaints/{complaint}', ComplaintDetail::class)->name('show');
+
+    Route::prefix('admin/complaints')
+        ->middleware('can:manage-complaints')          // coarse gate. ONCE, here.
+        ->name('admin.')
+        ->group(function () {
+            Route::livewire('/', Admin\ListComplaints::class)->name('index');
+            Route::livewire('/{complaint}', Admin\ComplaintDetail::class)->name('show');
+        });
+
+    Route::prefix('technician/complaints')
+        ->middleware('can:resolve-complaints')
+        ->name('technician.')
+        ->group(function () {
+            Route::livewire('/', Technician\ListComplaints::class)->name('index');
+        });
+
+    Route::prefix('staff/complaints')
+        ->name('staff.')
+        ->group(function () {
+            Route::livewire('/', Staff\ListComplaints::class)->name('index');
+            Route::livewire('/create', Staff\ComplaintForm::class)->name('create');
+        });
+});
+
+# names produced: complaints.show
+#                 complaints.admin.index      complaints.admin.show
+#                 complaints.technician.index
+#                 complaints.staff.index      complaints.staff.create
+#
+# NOT: routes/admin.php
+# NOT: Route::get('admin/complaints', Admin\ListComplaints::class)
+# NOT: Staff\ListComplaints mounted at complaints.index  (name no longer matches folder)
+
+
+# ─── 4. Gates — named capabilities, defined once ─────────────────────────────
+
+# app/Providers/AppServiceProvider.php — boot()
+#
+# How a role is STORED (enum | users.role column | permission package) is out of scope
+# for this idiom — swap the predicate body, keep the shape.
+
+Gate::define('manage-complaints',  fn (User $u) => $u->hasRole('admin'));
+Gate::define('resolve-complaints', fn (User $u) => $u->hasAnyRole('admin', 'technician'));
+
+
+# ─── 5. Admin component ──────────────────────────────────────────────────────
+
+namespace App\Livewire\Complaints\Admin;
+
+use App\Models\Complaint;
+use App\Models\User;
+use Livewire\Attributes\{Computed, Layout, Url};
+use Livewire\Component;
+use Livewire\WithPagination;
+
+#[Layout('layouts.admin')]                     // role layout — chrome genuinely differs
+class ListComplaints extends Component
+{
+    use WithPagination;
+
+    #[Url]
+    public string $status = '';
+
+    public function assign(Complaint $complaint, int $userId): void
+    {
+        $this->authorize('assign', $complaint);   // policy guards the ROW.
+        //  no Gate::allows('manage-complaints') here — the route group already denied it.
+
+        $complaint->update(['assigned_to' => $userId, 'status' => 'assigned']);
+
+        $this->dispatch('complaint-assigned', id: $complaint->id);
+    }
+
+    // data via #[Computed], NOT render(). the mirror still derives the view
+    // (everything-modular #9): livewire/complaints/admin/list-complaints.blade.php
+    #[Computed]
+    public function complaints()
+    {
+        return Complaint::query()
+            ->with(['asset', 'assignee'])
+            ->when($this->status, fn ($q) => $q->where('status', $this->status))
+            ->latest()
+            ->paginate(20);
+    }
+
+    #[Computed]
+    public function technicians()
+    {
+        // however you model roles — enum, column, package. out of scope here.
+        return User::query()->where('role', 'technician')->orderBy('name')->get();
+    }
+}
+
+
+# ─── 6. Technician component — same model, different SCOPE ───────────────────
+# The scoping is in the QUERY. Never in the view.
+
+namespace App\Livewire\Complaints\Technician;
+
+use App\Models\Complaint;
+use Livewire\Attributes\{Computed, Layout};
+use Livewire\Component;
+use Livewire\WithPagination;
+
+#[Layout('layouts.app')]
+class ListComplaints extends Component
+{
+    use WithPagination;
+
+    public function resolve(Complaint $complaint, string $note): void
+    {
+        $this->authorize('resolve', $complaint);
+
+        $complaint->update([
+            'status'      => 'resolved',
+            'resolution'  => $note,
+            'resolved_at' => now(),
+        ]);
+    }
+
+    #[Computed]
+    public function complaints()
+    {
+        return Complaint::query()
+            ->with('asset')
+            ->where('assigned_to', auth()->id())        // <- the scope. here, not blade.
+            ->whereIn('status', ['assigned', 'in_progress'])
+            ->oldest()
+            ->paginate(20);
+    }
+}
+
+
+# ─── 7. Staff component ──────────────────────────────────────────────────────
+
+namespace App\Livewire\Complaints\Staff;
+
+use App\Models\{Asset, Complaint};
+use App\Services\Complaints\ComplaintNumberGenerator;
+use Livewire\Attributes\{Computed, Layout, Validate};
+use Livewire\Component;
+
+#[Layout('layouts.app')]
+class ComplaintForm extends Component                 // NOT SubmitComplaint
+{
+    #[Validate('required|exists:assets,id')]
+    public ?int $asset_id = null;
+
+    #[Validate('required|string|min:10|max:2000')]
+    public string $description = '';
+
+    #[Validate('required|in:low,medium,high')]
+    public string $priority = 'medium';
+
+    public function save(ComplaintNumberGenerator $numbers): void
+    {
+        $this->authorize('create', Complaint::class);   // no record yet -> class-level
+        $this->validate();
+
+        $complaint = Complaint::create([
+            'reference'   => $numbers->next(),        // service knows nothing about roles
+            'asset_id'    => $this->asset_id,
+            'description' => $this->description,
+            'priority'    => $this->priority,
+            'status'      => 'open',
+            'reported_by' => auth()->id(),            // auth() in the COMPONENT — fine
+        ]);
+
+        session()->flash('status', "Complaint {$complaint->reference} submitted.");
+
+        $this->redirectRoute('complaints.staff.index');   // role-segmented name
+    }
+
+    #[Computed]
+    public function assets()
+    {
+        return Asset::orderBy('name')->get();
+    }
+}
+
+
+# ─── 8. Policy — flat in app/Policies, roles handled INSIDE ──────────────────
+
+namespace App\Policies;
+
+use App\Models\{Complaint, User};
+
+class ComplaintPolicy
+{
+    public function create(User $user): bool
+    {
+        return true;                                  // every authenticated role may report
+    }
+
+    public function view(User $user, Complaint $complaint): bool
+    {
+        return $user->hasRole('admin')
+            || $complaint->reported_by === $user->id
+            || $complaint->assigned_to === $user->id;
+    }
+
+    public function assign(User $user, Complaint $complaint): bool
+    {
+        return $user->hasRole('admin');
+    }
+
+    public function resolve(User $user, Complaint $complaint): bool
+    {
+        return $complaint->assigned_to === $user->id
+            && $complaint->status !== 'closed';
+    }
+}
+
+
+# ─── 9. Views ────────────────────────────────────────────────────────────────
+
+{{-- resources/views/livewire/complaints/admin/list-complaints.blade.php --}}
+<div class="space-y-4">
+    <div class="flex items-center justify-between">
+        <h1 class="text-xl font-semibold">All complaints</h1>
+        <select wire:model.live="status" class="rounded border-gray-300">
+            <option value="">All statuses</option>
+            <option value="open">Open</option>
+            <option value="assigned">Assigned</option>
+        </select>
+    </div>
+
+    <table class="w-full text-sm">
+        <tbody>
+            @foreach ($this->complaints as $complaint)
+                <tr wire:key="complaint-{{ $complaint->id }}" class="border-b">
+                    <td class="py-2 font-mono">{{ $complaint->reference }}</td>
+                    <td>{{ $complaint->asset->name }}</td>
+                    <td><x-complaints.status-badge :status="$complaint->status" /></td>
+                    <td>
+                        @can('assign', $complaint)
+                            <select wire:change="assign({{ $complaint->id }}, $event.target.value)"
+                                    class="rounded border-gray-300 text-xs">
+                                <option value="">Assign to…</option>
+                                @foreach ($this->technicians as $tech)
+                                    <option value="{{ $tech->id }}"
+                                        @selected($complaint->assigned_to === $tech->id)>
+                                        {{ $tech->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        @endcan
+                    </td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+
+    {{ $this->complaints->links() }}
+</div>
+
+
+{{-- resources/views/components/complaints/status-badge.blade.php --}}
+{{-- Shared across all three role views. ROLE-AGNOSTIC — that is the whole contract. --}}
+@props(['status'])
+
+@php
+    $classes = match ($status) {
+        'open'     => 'bg-amber-100 text-amber-800',
+        'assigned' => 'bg-blue-100 text-blue-800',
+        'resolved' => 'bg-green-100 text-green-800',
+        default    => 'bg-gray-100 text-gray-700',
+    };
+@endphp
+
+<span class="rounded px-2 py-0.5 text-xs {{ $classes }}">
+    {{ str($status)->headline() }}
+</span>
+
+# Note what the partial does NOT contain: no @if (auth()->user()->isAdmin()).
+# A partial with a role check inside is the role split undone in blade.
+# Partials are role-agnostic or they are not partials.
+
+
+# ─── 10. What does NOT get a role folder ─────────────────────────────────────
+#
+#   app/Livewire/Admin/Complaints/            WRONG -> app/Livewire/Complaints/Admin/
+#   app/Livewire/Admin/                       WRONG -> role is never a top-level module
+#   app/Services/Complaints/Admin/            WRONG -> app/Services/Complaints/
+#   app/Policies/Admin/ComplaintPolicy.php    WRONG -> app/Policies/ComplaintPolicy.php
+#   app/Models/Admin/                         WRONG -> app/Models/
+#   app/Livewire/Complaints/Shared/           WRONG -> resources/views/components/complaints/
+#   resources/views/layouts/complaints/admin/ WRONG -> resources/views/layouts/admin.blade.php
+#   routes/admin.php                          WRONG -> a group inside routes/complaints.php
+#
+# And two things that are not folders at all:
+#   a HasAdminScreens trait, a per-role service provider  -> nothing to register.
+#   The folder IS the mechanism.
